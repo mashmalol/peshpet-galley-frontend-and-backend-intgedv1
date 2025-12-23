@@ -1,0 +1,465 @@
+.pet-health-visual {
+  background: linear-gradient(135deg, rgba(0, 10, 20, 0.95), rgba(10, 0, 20, 0.95));
+  border: 2px solid rgba(0, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.2),
+    inset 0 0 20px rgba(0, 255, 255, 0.05);
+}
+
+.pet-health-visual::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #0ff, #f0f, #0ff);
+  opacity: 0.1;
+  z-index: 0;
+  animation: borderRotate 4s linear infinite;
+}
+
+@keyframes borderRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glitch-text {
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin: 0;
+  position: relative;
+  text-shadow: 
+    0 0 10px #0ff,
+    2px 2px 0 #f0f,
+    -2px -2px 0 #0ff;
+  animation: glitch 5s infinite;
+}
+
+@keyframes glitch {
+  0%, 90%, 100% {
+    transform: translate(0);
+  }
+  92% {
+    transform: translate(-2px, 2px);
+  }
+  94% {
+    transform: translate(2px, -2px);
+  }
+  96% {
+    transform: translate(-2px, -2px);
+  }
+  98% {
+    transform: translate(2px, 2px);
+  }
+}
+
+.subtitle {
+  color: #f0f;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+.verification-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+.verification-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  to { left: 100%; }
+}
+
+.verification-badge.verified {
+  background: rgba(0, 255, 0, 0.15);
+  border: 2px solid #0f0;
+  color: #0f0;
+  box-shadow: 
+    0 0 10px rgba(0, 255, 0, 0.5),
+    inset 0 0 10px rgba(0, 255, 0, 0.1);
+}
+
+.verification-badge.unverified {
+  background: rgba(255, 165, 0, 0.15);
+  border: 2px solid #ffa500;
+  color: #ffa500;
+  box-shadow: 
+    0 0 10px rgba(255, 165, 0, 0.5),
+    inset 0 0 10px rgba(255, 165, 0, 0.1);
+}
+
+.badge-icon {
+  font-size: 16px;
+  animation: pulse-icon 2s infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.section-title {
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-shadow: 0 0 10px #0ff;
+}
+
+.title-icon {
+  color: #f0f;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.3; }
+}
+
+.health-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.metric-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-label {
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.metric-numbers {
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.metric-bar-container {
+  height: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  position: relative;
+}
+
+.metric-bar {
+  height: 100%;
+  position: relative;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.bar-glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 100%;
+  opacity: 0.8;
+  filter: blur(8px);
+  animation: barPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes barPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.4; }
+}
+
+.bar-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    repeating-linear-gradient(90deg, rgba(0, 255, 255, 0.1) 0px, transparent 1px, transparent 10px),
+    repeating-linear-gradient(0deg, rgba(0, 255, 255, 0.1) 0px, transparent 1px, transparent 10px);
+  pointer-events: none;
+}
+
+.genetic-traits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trait-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 0, 255, 0.2);
+}
+
+.trait-hexagon {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, rgba(255, 0, 255, 0.2), rgba(0, 255, 255, 0.2));
+  clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 2px solid #f0f;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
+}
+
+.trait-value {
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 0 0 5px #f0f;
+}
+
+.trait-name {
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.service-indicators {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.service-chip {
+  padding: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.chip-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  padding: 2px;
+  background: linear-gradient(45deg, transparent, currentColor, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderSpin 3s linear infinite;
+}
+
+@keyframes borderSpin {
+  to { transform: rotate(360deg); }
+}
+
+.service-chip.active {
+  background: rgba(0, 255, 255, 0.1);
+  border: 1px solid #0ff;
+  color: #0ff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
+
+.service-chip.inactive {
+  background: rgba(100, 100, 100, 0.1);
+  border: 1px solid #666;
+  color: #666;
+}
+
+.chip-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.chip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chip-title {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.chip-status {
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+.id-display-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.id-display {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 0, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.id-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 0, 255, 0.1), transparent);
+  animation: scanEffect 3s infinite;
+}
+
+@keyframes scanEffect {
+  to { left: 100%; }
+}
+
+.id-label {
+  color: #f0f;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.id-code {
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(0, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 255, 0.03) 0px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  animation: scanLinesMove 10s linear infinite;
+}
+
+@keyframes scanLinesMove {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(20px); }
+}
+
+@media (max-width: 768px) {
+  .health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-indicators {
+    grid-template-columns: 1fr;
+  }
+
+  .id-display-grid {
+    grid-template-columns: 1fr;
+  }
+}

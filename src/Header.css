@@ -1,0 +1,47 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+}
+
+.nav-button {
+  background: none;
+  border: 1px solid white;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.nav-button:hover {
+  background-color: white;
+  color: black;
+}
+
+.connect-wallet {
+  background-color: #ffcc33;
+  color: black;
+  font-weight: bold;
+}
+
+.connect-wallet:hover {
+  background-color: #e6b800;
+}
