@@ -6,17 +6,34 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /**
  * @title PeshPetNFT
- * @dev ERC721 NFT contract for PeshPet digital pets with marketplace and NFC integration
+ * @dev ERC721 NFT contract for PeshPet digital pets with marketplace, NFC integration, and lazy minting
  */
-contract PeshPetNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
+contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
+    using ECDSA for bytes32;
+    
     Counters.Counter private _tokenIds;
+
+    // EIP712 domain separator
+    string private constant SIGNING_DOMAIN = "PeshPet-Voucher";
+    string private constant SIGNATURE_VERSION = "1";
 
     // Royalty percentage (basis points, e.g., 1000 = 10%)
     uint256 public royaltyBasisPoints = 1000;
+
+    // Lazy minting voucher structure
+    struct LazyMintVoucher {
+        uint256 tokenId;
+        uint256 minPrice;
+        string tokenURI;
+        PetInfo petInfo;
+        bytes signature;
+    }
 
     // Marketplace listings
     struct Listing {
@@ -43,9 +60,11 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
     mapping(string => uint256) public nfcToTokenId;
     mapping(uint256 => string) public tokenIdToNFC;
     mapping(address => bool) public authorizedBreeders;
+    mapping(uint256 => bool) public lazyMinted; // Track which tokens were lazy minted
 
     // Events
     event PetMinted(uint256 indexed tokenId, address indexed owner, string nfcId);
+    event PetLazyMinted(uint256 indexed tokenId, address indexed redeemer, address indexed breeder, uint256 price);
     event PetListed(uint256 indexed tokenId, uint256 price, address indexed seller);
     event PetUnlisted(uint256 indexed tokenId);
     event PetSold(uint256 indexed tokenId, address indexed from, address indexed to, uint256 price);
@@ -53,7 +72,7 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
     event BreederAuthorized(address indexed breeder);
     event BreederRevoked(address indexed breeder);
 
-    constructor() ERC721("PeshPet", "PESH") Ownable(msg.sender) {
+    constructor() ERC721("PeshPet", "PESH") EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) Ownable(msg.sender) {
         authorizedBreeders[msg.sender] = true;
     }
 
@@ -235,6 +254,119 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, ReentrancyGuard, Ownable {
      */
     function totalSupply() external view returns (uint256) {
         return _tokenIds.current();
+    }
+
+    /**
+     * @dev Lazy mint - Redeem a voucher and mint NFT on-demand
+     * @param voucher The lazy mint voucher signed by an authorized breeder
+     */
+    function lazyMint(LazyMintVoucher calldata voucher) 
+        external 
+        payable 
+        nonReentrant 
+        returns (uint256) 
+    {
+        require(msg.value >= voucher.minPrice, "Insufficient payment");
+        
+        // Verify the signature and get the signer
+        address signer = _verifyVoucher(voucher);
+        require(authorizedBreeders[signer] || signer == owner(), "Invalid voucher signer");
+        
+        // Check if token was already minted
+        require(!_exists(voucher.tokenId), "Token already minted");
+        
+        // Verify NFC ID is unique
+        require(bytes(voucher.petInfo.nfcId).length > 0, "NFC ID required");
+        require(nfcToTokenId[voucher.petInfo.nfcId] == 0, "NFC ID already registered");
+
+        // Mint the NFT to the redeemer
+        _safeMint(msg.sender, voucher.tokenId);
+        _setTokenURI(voucher.tokenId, voucher.tokenURI);
+
+        // Store pet info
+        petInfo[voucher.tokenId] = voucher.petInfo;
+        petInfo[voucher.tokenId].breeder = signer;
+
+        // Map NFC ID to token
+        nfcToTokenId[voucher.petInfo.nfcId] = voucher.tokenId;
+        tokenIdToNFC[voucher.tokenId] = voucher.petInfo.nfcId;
+        
+        // Mark as lazy minted
+        lazyMinted[voucher.tokenId] = true;
+
+        // Calculate and send payment to breeder (minus royalty kept by contract/owner)
+        uint256 royaltyAmount = (msg.value * royaltyBasisPoints) / 10000;
+        uint256 breederAmount = msg.value - royaltyAmount;
+
+        if (breederAmount > 0) {
+            (bool sentToBreeder, ) = payable(signer).call{value: breederAmount}("");
+            require(sentToBreeder, "Failed to send payment to breeder");
+        }
+
+        // Royalty goes to contract owner
+        if (royaltyAmount > 0) {
+            (bool sentToOwner, ) = payable(owner()).call{value: royaltyAmount}("");
+            require(sentToOwner, "Failed to send royalty");
+        }
+
+        emit PetLazyMinted(voucher.tokenId, msg.sender, signer, msg.value);
+        emit PetMinted(voucher.tokenId, msg.sender, voucher.petInfo.nfcId);
+
+        return voucher.tokenId;
+    }
+
+    /**
+     * @dev Get the chain ID for EIP712
+     */
+    function getChainId() external view returns (uint256) {
+        return block.chainid;
+    }
+
+    /**
+     * @dev Verify a lazy mint voucher signature
+     * @param voucher The voucher to verify
+     * @return The address that signed the voucher
+     */
+    function _verifyVoucher(LazyMintVoucher calldata voucher) 
+        internal 
+        view 
+        returns (address) 
+    {
+        bytes32 digest = _hashVoucher(voucher);
+        return digest.recover(voucher.signature);
+    }
+
+    /**
+     * @dev Hash a voucher for signature verification
+     * @param voucher The voucher to hash
+     * @return The hash of the voucher
+     */
+    function _hashVoucher(LazyMintVoucher calldata voucher) 
+        internal 
+        view 
+        returns (bytes32) 
+    {
+        return _hashTypedDataV4(keccak256(abi.encode(
+            keccak256("LazyMintVoucher(uint256 tokenId,uint256 minPrice,string tokenURI,string name,string species,string nfcId,string microchipId,uint256 birthDate,bool has3DPrinting,bool hasInsurance)"),
+            voucher.tokenId,
+            voucher.minPrice,
+            keccak256(bytes(voucher.tokenURI)),
+            keccak256(bytes(voucher.petInfo.name)),
+            keccak256(bytes(voucher.petInfo.species)),
+            keccak256(bytes(voucher.petInfo.nfcId)),
+            keccak256(bytes(voucher.petInfo.microchipId)),
+            voucher.petInfo.birthDate,
+            voucher.petInfo.has3DPrinting,
+            voucher.petInfo.hasInsurance
+        )));
+    }
+
+    /**
+     * @dev Check if a token exists
+     * @param tokenId The token ID to check
+     */
+    function _exists(uint256 tokenId) internal view returns (bool) {
+        return _ownerOf(tokenId) != address(0);
     }
 
     // Override required by Solidity

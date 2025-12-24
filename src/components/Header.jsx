@@ -97,6 +97,13 @@ function Header({ onNavigate, activeView }) {
           >
             Mint Pet
           </button>
+          <button 
+            className={`nav-btn ${activeView === 'lazymint' ? 'active' : ''}`}
+            onClick={() => onNavigate('lazymint')}
+            disabled={!walletAddress}
+          >
+            Lazy Mint
+          </button>
           {walletAddress && (
             <button 
               className={`nav-btn ${activeView === 'dashboard' ? 'active' : ''}`}

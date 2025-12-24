@@ -4,6 +4,7 @@ import Header from './components/Header';
 import ExploreGallery from './components/ExploreGallery';
 import MintForm from './components/MintForm';
 import UserDashboard from './components/UserDashboard';
+import LazyMint from './components/LazyMint';
 
 function DigitalRain() {
   const canvasRef = useRef(null);
@@ -107,6 +108,7 @@ function App() {
         {activeView === 'explore' && <ExploreGallery />}
         {activeView === 'mint' && <MintForm />}
         {activeView === 'dashboard' && <UserDashboard />}
+        {activeView === 'lazymint' && <LazyMint />}
       </main>
     </div>
   );
