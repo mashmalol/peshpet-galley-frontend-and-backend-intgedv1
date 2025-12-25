@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -13,7 +14,7 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
  * @title PeshPetNFT
  * @dev ERC721 NFT contract for PeshPet digital pets with marketplace, NFC integration, and lazy minting
  */
-contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownable {
+contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Pausable, Ownable {
     using Counters for Counters.Counter;
     using ECDSA for bytes32;
     
@@ -26,12 +27,21 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
     // Royalty percentage (basis points, e.g., 1000 = 10%)
     uint256 public royaltyBasisPoints = 1000;
 
+    // Price validation constants
+    uint256 public constant MIN_PRICE = 0.001 ether;
+    uint256 public constant MAX_PRICE = 1000 ether;
+
+    // Rate limiting
+    mapping(address => uint256) public lastMintTime;
+    uint256 public constant MINT_COOLDOWN = 1 minutes;
+
     // Lazy minting voucher structure
     struct LazyMintVoucher {
         uint256 tokenId;
         uint256 minPrice;
         string tokenURI;
         PetInfo petInfo;
+        uint256 deadline;
         bytes signature;
     }
 
@@ -61,6 +71,7 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
     mapping(uint256 => string) public tokenIdToNFC;
     mapping(address => bool) public authorizedBreeders;
     mapping(uint256 => bool) public lazyMinted; // Track which tokens were lazy minted
+    mapping(bytes32 => bool) private _usedVouchers; // Prevent voucher replay attacks
 
     // Events
     event PetMinted(uint256 indexed tokenId, address indexed owner, string nfcId);
@@ -71,6 +82,9 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
     event NFCTransfer(string indexed nfcId, uint256 indexed tokenId, address indexed newOwner);
     event BreederAuthorized(address indexed breeder);
     event BreederRevoked(address indexed breeder);
+    event SecurityAlert(string message, address indexed actor, uint256 timestamp);
+    event LargeTransaction(uint256 indexed tokenId, uint256 amount, address indexed from, address indexed to);
+    event EmergencyWithdrawal(address indexed owner, uint256 amount);
 
     constructor() ERC721("PeshPet", "PESH") EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) Ownable(msg.sender) {
         authorizedBreeders[msg.sender] = true;
@@ -92,9 +106,13 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
         address _to,
         string memory _tokenURI,
         PetInfo memory _petInfo
-    ) public onlyBreeder returns (uint256) {
+    ) public onlyBreeder whenNotPaused returns (uint256) {
+        require(_to != address(0), "Cannot mint to zero address");
+        require(block.timestamp >= lastMintTime[msg.sender] + MINT_COOLDOWN, "Minting too fast");
         require(bytes(_petInfo.nfcId).length > 0, "NFC ID required");
         require(nfcToTokenId[_petInfo.nfcId] == 0, "NFC ID already registered");
+
+        lastMintTime[msg.sender] = block.timestamp;
 
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
@@ -119,9 +137,10 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
      * @param _tokenId Token ID to list
      * @param _price Price in wei
      */
-    function listPetForSale(uint256 _tokenId, uint256 _price) external nonReentrant {
+    function listPetForSale(uint256 _tokenId, uint256 _price) external nonReentrant whenNotPaused {
         require(ownerOf(_tokenId) == msg.sender, "Not the owner");
-        require(_price > 0, "Price must be greater than 0");
+        require(_price >= MIN_PRICE, "Price too low");
+        require(_price <= MAX_PRICE, "Price too high");
         require(!listings[_tokenId].active, "Already listed");
 
         listings[_tokenId] = Listing({
@@ -149,11 +168,16 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
      * @dev Buy a listed pet
      * @param _tokenId Token ID to purchase
      */
-    function buyPet(uint256 _tokenId) external payable nonReentrant {
+    function buyPet(uint256 _tokenId) external payable nonReentrant whenNotPaused {
         Listing memory listing = listings[_tokenId];
         require(listing.active, "Pet not for sale");
         require(msg.value >= listing.price, "Insufficient payment");
         require(msg.sender != listing.seller, "Cannot buy your own pet");
+
+        // Monitor large transactions
+        if (msg.value > 10 ether) {
+            emit LargeTransaction(_tokenId, msg.value, listing.seller, msg.sender);
+        }
 
         address seller = listing.seller;
         uint256 salePrice = listing.price;
@@ -263,10 +287,19 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
     function lazyMint(LazyMintVoucher calldata voucher) 
         external 
         payable 
-        nonReentrant 
+        nonReentrant
+        whenNotPaused
         returns (uint256) 
     {
         require(msg.value >= voucher.minPrice, "Insufficient payment");
+        require(voucher.minPrice >= MIN_PRICE, "Min price too low");
+        require(voucher.minPrice <= MAX_PRICE, "Min price too high");
+        require(block.timestamp <= voucher.deadline, "Voucher expired");
+        
+        // Prevent voucher replay attacks
+        bytes32 voucherHash = _hashVoucher(voucher);
+        require(!_usedVouchers[voucherHash], "Voucher already used");
+        _usedVouchers[voucherHash] = true;
         
         // Verify the signature and get the signer
         address signer = _verifyVoucher(voucher);
@@ -274,6 +307,9 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
         
         // Check if token was already minted
         require(!_exists(voucher.tokenId), "Token already minted");
+        
+        // Ensure tokenId doesn't conflict with regular minting
+        require(voucher.tokenId > _tokenIds.current(), "Token ID must be higher than current supply");
         
         // Verify NFC ID is unique
         require(bytes(voucher.petInfo.nfcId).length > 0, "NFC ID required");
@@ -293,6 +329,13 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
         
         // Mark as lazy minted
         lazyMinted[voucher.tokenId] = true;
+        
+        // Update counter to prevent ID collision
+        if (voucher.tokenId > _tokenIds.current()) {
+            while (_tokenIds.current() < voucher.tokenId) {
+                _tokenIds.increment();
+            }
+        }
 
         // Calculate and send payment to breeder (minus royalty kept by contract/owner)
         uint256 royaltyAmount = (msg.value * royaltyBasisPoints) / 10000;
@@ -347,7 +390,7 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
         returns (bytes32) 
     {
         return _hashTypedDataV4(keccak256(abi.encode(
-            keccak256("LazyMintVoucher(uint256 tokenId,uint256 minPrice,string tokenURI,string name,string species,string nfcId,string microchipId,uint256 birthDate,bool has3DPrinting,bool hasInsurance)"),
+            keccak256("LazyMintVoucher(uint256 tokenId,uint256 minPrice,string tokenURI,string name,string species,string nfcId,string microchipId,uint256 birthDate,bool has3DPrinting,bool hasInsurance,uint256 deadline)"),
             voucher.tokenId,
             voucher.minPrice,
             keccak256(bytes(voucher.tokenURI)),
@@ -357,7 +400,8 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
             keccak256(bytes(voucher.petInfo.microchipId)),
             voucher.petInfo.birthDate,
             voucher.petInfo.has3DPrinting,
-            voucher.petInfo.hasInsurance
+            voucher.petInfo.hasInsurance,
+            voucher.deadline
         )));
     }
 
@@ -390,5 +434,35 @@ contract PeshPetNFT is ERC721, ERC721URIStorage, EIP712, ReentrancyGuard, Ownabl
 
     function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
         super._burn(tokenId);
+    }
+
+    /**
+     * @dev Pause all token transfers and minting (emergency only)
+     */
+    function pause() external onlyOwner {
+        _pause();
+        emit SecurityAlert("Contract paused", msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Unpause the contract
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+        emit SecurityAlert("Contract unpaused", msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Emergency withdrawal in case funds get stuck
+     */
+    function emergencyWithdraw() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No funds to withdraw");
+        
+        (bool sent, ) = payable(owner()).call{value: balance}("");
+        require(sent, "Withdrawal failed");
+        
+        emit EmergencyWithdrawal(owner(), balance);
+        emit SecurityAlert("Emergency withdrawal executed", msg.sender, block.timestamp);
     }
 }

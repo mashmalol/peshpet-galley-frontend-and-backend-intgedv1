@@ -24,6 +24,7 @@ const LazyMintVoucherType = {
     { name: "birthDate", type: "uint256" },
     { name: "has3DPrinting", type: "bool" },
     { name: "hasInsurance", type: "bool" },
+    { name: "deadline", type: "uint256" },
   ],
 };
 
@@ -40,6 +41,7 @@ async function createLazyMintVoucher(signer, contractAddress, voucherData) {
     minPrice,
     tokenURI,
     petInfo,
+    deadline,
   } = voucherData;
 
   // Get chain ID
@@ -66,6 +68,7 @@ async function createLazyMintVoucher(signer, contractAddress, voucherData) {
     birthDate: petInfo.birthDate,
     has3DPrinting: petInfo.has3DPrinting,
     hasInsurance: petInfo.hasInsurance,
+    deadline: deadline,
   };
 
   // Sign the voucher
@@ -76,6 +79,7 @@ async function createLazyMintVoucher(signer, contractAddress, voucherData) {
     minPrice: minPrice,
     tokenURI: tokenURI,
     petInfo: petInfo,
+    deadline: deadline,
     signature: signature,
   };
 }
@@ -94,6 +98,7 @@ async function main() {
     tokenId: 1000, // Use a unique token ID (can be sequential or random)
     minPrice: ethers.parseEther("0.1"), // Minimum price in ETH
     tokenURI: "ipfs://QmYourIPFSHashHere", // IPFS URI for metadata
+    deadline: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days from now
     petInfo: {
       name: "Fluffy",
       species: "Golden Retriever",
